@@ -3,3 +3,8 @@ smallpt
 
 # Images
 *.ppm
+
+# Eclipse Project
+.cproject
+.project
+.settings
