@@ -1,15 +1,13 @@
-#include <math.h>   // smallpt, a Path Tracer by Kevin Beason, 2008
-#include <stdio.h>  //        Remove "-fopenmp" for g++ version < 4.2
-#include <stdlib.h> // Make : g++ -O3 -fopenmp smallpt.cpp -o smallpt
+#include <cmath>   // smallpt, a Path Tracer by Kevin Beason, 2008
+#include <cstdio>  //        Remove "-fopenmp" for g++ version < 4.2
+#include <cstdlib> // Make : g++ -O3 -fopenmp smallpt.cpp -o smallpt
+#include <fstream>
+#include <iostream>
+#include <vector>
 struct Vec
 {                   // Usage: time ./smallpt 5000 && xv image.ppm
     double x, y, z; // position, also color (r,g,b)
-    Vec(double x_ = 0, double y_ = 0, double z_ = 0)
-    {
-        x = x_;
-        y = y_;
-        z = z_;
-    }
+    explicit Vec(double x_ = 0, double y_ = 0, double z_ = 0) : x(x_), y(y_), z(z_) {};
     Vec operator+(const Vec& b) const { return Vec(x + b.x, y + b.y, z + b.z); }
     Vec operator-(const Vec& b) const { return Vec(x - b.x, y - b.y, z - b.z); }
     Vec operator*(double b) const { return Vec(x * b, y * b, z * b); }
@@ -43,9 +41,13 @@ struct Sphere
         double b = op.dot(r.d);
         double det = b * b - op.dot(op) + rad * rad;
         if (det < 0)
+        {
             return 0;
+        }
         else
+        {
             det = sqrt(det);
+        }
         return (t = b - det) > eps ? t : ((t = b + det) > eps ? t : 0);
     }
 };
@@ -70,11 +72,13 @@ inline bool intersect(const Ray& r, double& t, int& id)
     double d;
     double inf = t = 1e20;
     for (int i = int(n); i--;)
+    {
         if ((d = spheres[i].intersect(r)) && d < t)
         {
             t = d;
             id = i;
         }
+    }
     return t < inf;
 }
 Vec radiance(const Ray& r, int depth, unsigned short* Xi)
@@ -82,7 +86,9 @@ Vec radiance(const Ray& r, int depth, unsigned short* Xi)
     double t;   // distance to intersection
     int id = 0; // id of intersected object
     if (!intersect(r, t, id))
+    {
         return Vec();                // if miss, return black
+    }
     const Sphere& obj = spheres[id]; // the hit object
     Vec x = r.o + r.d * t;
     Vec n = (x - obj.p).norm();
@@ -92,9 +98,13 @@ Vec radiance(const Ray& r, int depth, unsigned short* Xi)
     if (++depth > 5)
     {
         if (erand48(Xi) < p)
+        {
             f = f * (1 / p);
+        }
         else
+        {
             return obj.e; // R.R.
+        }
     }
     if (obj.refl == DIFF)
     { // Ideal DIFFUSE reflection
@@ -107,7 +117,9 @@ Vec radiance(const Ray& r, int depth, unsigned short* Xi)
         Vec d = (u * cos(r1) * r2s + v * sin(r1) * r2s + w * sqrt(1 - r2)).norm();
         return obj.e + f.mult(radiance(Ray(x, d), depth, Xi));
     } else if (obj.refl == SPEC) // Ideal SPECULAR reflection
+    {
         return obj.e + f.mult(radiance(Ray(x, r.d - n * 2 * n.dot(r.d)), depth, Xi));
+    }
     Ray reflRay(x, r.d - n * 2 * n.dot(r.d)); // Ideal dielectric REFRACTION
     bool into = n.dot(nl) > 0;                // Ray from outside going in?
     double nc = 1;
@@ -116,7 +128,9 @@ Vec radiance(const Ray& r, int depth, unsigned short* Xi)
     double ddn = r.d.dot(nl);
     double cos2t;
     if ((cos2t = 1 - nnt * nnt * (1 - ddn * ddn)) < 0) // Total internal reflection
+    {
         return obj.e + f.mult(radiance(reflRay, depth, Xi));
+    }
     Vec tdir = (r.d * nnt - n * ((into ? 1 : -1) * (ddn * nnt + sqrt(cos2t)))).norm();
     double a = nt - nc;
     double b = nt + nc;
@@ -134,22 +148,23 @@ Vec radiance(const Ray& r, int depth, unsigned short* Xi)
 }
 int main(int argc, char* argv[])
 {
-    int w = 1024;
-    int h = 768;
+    constexpr int w = 1024;
+    constexpr int h = 768;
     int samps = argc == 2 ? atoi(argv[1]) / 4 : 1; // # samples
     Ray cam(Vec(50, 52, 295.6), Vec(0, -0.042612, -1).norm());        // cam pos, dir
     Vec cx = Vec(w * .5135 / h);
     Vec cy = (cx % cam.d).norm() * .5135;
     Vec r;
-    Vec *c = new Vec[w * h];
+    std::vector<Vec> c(w * h); // = new Vec[w * h];
 #pragma omp parallel for schedule(dynamic, 1) private(r) // OpenMP
-    for (int y = 0; y < h; y++)
+    for (unsigned int y = 0; y < h; y++)
     { // Loop over image rows
-        fprintf(stderr, "\rRendering (%d spp) %5.2f%%", samps * 4, 100. * y / (h - 1));
+    	std::cerr << "\rRendering (" << samps * 4 << " spp) " << 100. * y / (h - 1);
+        //fprintf(stderr, "\rRendering (%d spp) %5.2f%%", samps * 4, 100. * y / (h - 1));
         unsigned short Xi[3] = {0, 0, static_cast<unsigned short>(y * y * y)};
         for (unsigned short x = 0; x < w; x++) // Loop cols
         {
-            for (int sy = 0, i = (h - y - 1) * w + x; sy < 2; sy++)       // 2x2 subpixel rows
+            for (unsigned int sy = 0, i = (h - y - 1) * w + x; sy < 2; sy++)       // 2x2 subpixel rows
             {
                 for (int sx = 0; sx < 2; sx++, r = Vec())
                 { // 2x2 subpixel cols
@@ -168,8 +183,17 @@ int main(int argc, char* argv[])
             }
         }
     }
-    FILE* f = fopen("image.ppm", "w"); // Write image to PPM file.
-    fprintf(f, "P3\n%d %d\n%d\n", w, h, 255);
-    for (int i = 0; i < w * h; i++)
-        fprintf(f, "%d %d %d ", toInt(c[i].x), toInt(c[i].y), toInt(c[i].z));
+    std::ofstream f;
+    f.open("image.ppm"); // Write image to PPM file.
+    f << "P3\n" << w << " " << h << "\n" << 255 << "\n";
+    //fprintf(f, "P3\n%d %d\n%d\n", w, h, 255);
+    for (auto printVec : c)
+    {
+    	f << toInt(printVec.x) << " " << toInt(printVec.y) << " " << toInt(printVec.z) << " ";
+    }
+//    for (int i = 0; i < w * h; i++)
+//    {
+//    	f << toInt(c[i].x) << " " << toInt(c[i].y) << " " << toInt(c[i].z) << " ";
+//        //fprintf(f, "%d %d %d ", toInt(c[i].x), toInt(c[i].y), toInt(c[i].z));
+//    }
 }
