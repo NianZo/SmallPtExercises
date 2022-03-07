@@ -4,6 +4,7 @@
 #include <fstream>
 #include <iostream>
 #include <vector>
+#include <random>
 struct Vec
 {                   // Usage: time ./smallpt 5000 && xv image.ppm
     double x, y, z; // position, also color (r,g,b)
@@ -81,8 +82,9 @@ inline bool intersect(const Ray& r, double& t, int& id)
     }
     return t < inf;
 }
-Vec radiance(const Ray& r, int depth, unsigned short* Xi)
+Vec radiance(const Ray& r, int depth, std::mt19937& gen)
 {
+	std::uniform_real_distribution<> dis(0.0F, 1.0F);
     double t;   // distance to intersection
     int id = 0; // id of intersected object
     if (!intersect(r, t, id))
@@ -97,7 +99,7 @@ Vec radiance(const Ray& r, int depth, unsigned short* Xi)
     double p = f.x > f.y && f.x > f.z ? f.x : f.y > f.z ? f.y : f.z; // max refl
     if (++depth > 5)
     {
-        if (erand48(Xi) < p)
+        if (dis(gen) < p)
         {
             f = f * (1 / p);
         }
@@ -108,17 +110,17 @@ Vec radiance(const Ray& r, int depth, unsigned short* Xi)
     }
     if (obj.refl == DIFF)
     { // Ideal DIFFUSE reflection
-        double r1 = 2 * M_PI * erand48(Xi);
-        double r2 = erand48(Xi);
+        double r1 = 2 * M_PI * dis(gen);
+        double r2 = dis(gen);
         double r2s = sqrt(r2);
         Vec w = nl;
         Vec u = ((fabs(w.x) > .1 ? Vec(0, 1) : Vec(1)) % w).norm();
         Vec v = w % u;
         Vec d = (u * cos(r1) * r2s + v * sin(r1) * r2s + w * sqrt(1 - r2)).norm();
-        return obj.e + f.mult(radiance(Ray(x, d), depth, Xi));
+        return obj.e + f.mult(radiance(Ray(x, d), depth, gen));
     } else if (obj.refl == SPEC) // Ideal SPECULAR reflection
     {
-        return obj.e + f.mult(radiance(Ray(x, r.d - n * 2 * n.dot(r.d)), depth, Xi));
+        return obj.e + f.mult(radiance(Ray(x, r.d - n * 2 * n.dot(r.d)), depth, gen));
     }
     Ray reflRay(x, r.d - n * 2 * n.dot(r.d)); // Ideal dielectric REFRACTION
     bool into = n.dot(nl) > 0;                // Ray from outside going in?
@@ -129,7 +131,7 @@ Vec radiance(const Ray& r, int depth, unsigned short* Xi)
     double cos2t;
     if ((cos2t = 1 - nnt * nnt * (1 - ddn * ddn)) < 0) // Total internal reflection
     {
-        return obj.e + f.mult(radiance(reflRay, depth, Xi));
+        return obj.e + f.mult(radiance(reflRay, depth, gen));
     }
     Vec tdir = (r.d * nnt - n * ((into ? 1 : -1) * (ddn * nnt + sqrt(cos2t)))).norm();
     double a = nt - nc;
@@ -141,15 +143,15 @@ Vec radiance(const Ray& r, int depth, unsigned short* Xi)
     double P = .25 + .5 * Re;
     double RP = Re / P;
     double TP = Tr / (1 - P);
-    return obj.e + f.mult(depth > 2 ? (erand48(Xi) < P ? // Russian roulette
-                                           radiance(reflRay, depth, Xi) * RP
-                                                       : radiance(Ray(x, tdir), depth, Xi) * TP)
-                                    : radiance(reflRay, depth, Xi) * Re + radiance(Ray(x, tdir), depth, Xi) * Tr);
+    return obj.e + f.mult(depth > 2 ? (dis(gen) < P ? // Russian roulette
+                                           radiance(reflRay, depth, gen) * RP
+                                                       : radiance(Ray(x, tdir), depth, gen) * TP)
+                                    : radiance(reflRay, depth, gen) * Re + radiance(Ray(x, tdir), depth, gen) * Tr);
 }
 int main(int argc, char* argv[])
 {
-    constexpr int w = 1024;
-    constexpr int h = 768;
+    constexpr uint32_t w = 1024;
+    constexpr uint32_t h = 768;
     int samps = argc == 2 ? atoi(argv[1]) / 4 : 1; // # samples
     Ray cam(Vec(50, 52, 295.6), Vec(0, -0.042612, -1).norm());        // cam pos, dir
     Vec cx = Vec(w * .5135 / h);
@@ -157,26 +159,27 @@ int main(int argc, char* argv[])
     Vec r;
     std::vector<Vec> c(w * h); // = new Vec[w * h];
 #pragma omp parallel for schedule(dynamic, 1) private(r) // OpenMP
-    for (unsigned int y = 0; y < h; y++)
+    for (uint32_t y = 0; y < h; y++)
     { // Loop over image rows
     	std::cerr << "\rRendering (" << samps * 4 << " spp) " << 100. * y / (h - 1);
-        //fprintf(stderr, "\rRendering (%d spp) %5.2f%%", samps * 4, 100. * y / (h - 1));
-        unsigned short Xi[3] = {0, 0, static_cast<unsigned short>(y * y * y)};
-        for (unsigned short x = 0; x < w; x++) // Loop cols
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_real_distribution<> dis(0.0F, 1.0F);
+        for (uint32_t x = 0; x < w; x++) // Loop cols
         {
-            for (unsigned int sy = 0, i = (h - y - 1) * w + x; sy < 2; sy++)       // 2x2 subpixel rows
+            for (uint32_t sy = 0, i = (h - y - 1) * w + x; sy < 2; sy++)       // 2x2 subpixel rows
             {
                 for (int sx = 0; sx < 2; sx++, r = Vec())
                 { // 2x2 subpixel cols
                     for (int s = 0; s < samps; s++)
                     {
-                        double r1 = 2 * erand48(Xi);
+                        double r1 = 2 * dis(gen);
                         double dx = r1 < 1 ? sqrt(r1) - 1 : 1 - sqrt(2 - r1);
-                        double r2 = 2 * erand48(Xi);
+                        double r2 = 2 * dis(gen);
                         double dy = r2 < 1 ? sqrt(r2) - 1 : 1 - sqrt(2 - r2);
                         Vec d = cx * (((sx + .5 + dx) / 2 + x) / w - .5) +
                                 cy * (((sy + .5 + dy) / 2 + y) / h - .5) + cam.d;
-                        r = r + radiance(Ray(cam.o + d * 140, d.norm()), 0, Xi) * (1. / samps);
+                        r = r + radiance(Ray(cam.o + d * 140, d.norm()), 0, gen) * (1. / samps);
                     } // Camera rays are pushed ^^^^^ forward to start in interior
                     c[i] = c[i] + Vec(clamp(r.x), clamp(r.y), clamp(r.z)) * .25;
                 }
@@ -186,14 +189,8 @@ int main(int argc, char* argv[])
     std::ofstream f;
     f.open("image.ppm"); // Write image to PPM file.
     f << "P3\n" << w << " " << h << "\n" << 255 << "\n";
-    //fprintf(f, "P3\n%d %d\n%d\n", w, h, 255);
     for (auto printVec : c)
     {
     	f << toInt(printVec.x) << " " << toInt(printVec.y) << " " << toInt(printVec.z) << " ";
     }
-//    for (int i = 0; i < w * h; i++)
-//    {
-//    	f << toInt(c[i].x) << " " << toInt(c[i].y) << " " << toInt(c[i].z) << " ";
-//        //fprintf(f, "%d %d %d ", toInt(c[i].x), toInt(c[i].y), toInt(c[i].z));
-//    }
 }
