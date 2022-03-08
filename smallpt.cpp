@@ -4,9 +4,9 @@
 #include <cstdlib> // Make : g++ -O3 -fopenmp smallpt.cpp -o smallpt
 #include <fstream>
 #include <iostream>
-#include <sstream>
 #include <random>
 #include <span>
+#include <sstream>
 #include <vector>
 struct __attribute__((aligned(32))) Vec
 {                   // Usage: time ./smallpt 5000 && xv image.ppm
@@ -38,7 +38,7 @@ struct __attribute__((aligned(128))) Sphere
     Refl_t refl; // reflection type (DIFFuse, SPECular, REFRactive)
     Sphere(const Vec& p_, const Vec& e_, const Vec& c_, double rad_, Refl_t refl_) noexcept : p(p_), e(e_), c(c_), rad(rad_), refl(refl_) {}
     [[nodiscard]] double intersect(const Ray& r) const
-    {                     // returns distance, 0 if nohit
+    {                           // returns distance, 0 if nohit
         const Vec op = p - r.o; // Solve t^2*d.d + 2*t*(o-p).d + (o-p).(o-p)-R^2 = 0
         const double eps = 1e-4;
         const double b = op.dot(r.d);
@@ -66,7 +66,7 @@ const std::array<Sphere, 9> spheres = {
     Sphere(Vec(50, 681.6 - .27, 81.6), Vec(12, 12, 12), Vec(), 600, DIFF)     // Lite
 };
 inline double clamp(const double x) { return x < 0 ? 0 : x > 1 ? 1
-                                                         : x; }
+                                                               : x; }
 inline int toInt(const double x) { return static_cast<int>(lround(pow(clamp(x), 1 / 2.2) * 255)); }
 inline bool intersect(const Ray& r, double& t, int& id)
 {
@@ -98,7 +98,7 @@ Vec radiance(const Ray& r, int depth, std::mt19937& gen)
     const Vec nl = n.dot(r.d) < 0 ? n : n * -1;
     Vec f = obj.c;
     const double p = f.x > f.y && f.x > f.z ? f.x : f.y > f.z ? f.y
-                                                        : f.z; // max refl
+                                                              : f.z; // max refl
     if (++depth > 5)
     {
         if (dis(gen) < p)
@@ -189,8 +189,8 @@ int main(int argc, char* argv[])
 #pragma omp parallel for schedule(dynamic, 1)       // OpenMP
     for (uint32_t y = 0; y < h; y++)
     { // Loop over image rows
-    	std::stringstream progress;
-    	progress << "\rRendering (" << samps * 4 << " spp) " << 100. * y / (h - 1);
+        std::stringstream progress;
+        progress << "\rRendering (" << samps * 4 << " spp) " << 100. * y / (h - 1);
         std::cerr << progress.str();
         std::random_device rd;
         std::mt19937 gen(rd());
