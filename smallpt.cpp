@@ -42,12 +42,12 @@ struct __attribute__((aligned(128))) Sphere
         const Vec op = p - r.o; // Solve t^2*d.d + 2*t*(o-p).d + (o-p).(o-p)-R^2 = 0
         const double eps = 1e-4;
         const double b = op.dot(r.d);
-        double det = b * b - op.dot(op) + rad * rad;
-        if (det < 0)
+        const double det2 = b * b - op.dot(op) + rad * rad;
+        if (det2 < 0)
         {
             return 0;
         }
-        det = sqrt(det);
+        const double det = sqrt(det2);
         const double t1 = b - det;
         const double t2 = b + det;
         return t1 > eps ? t1 : (t2 > eps ? t2 : 0);
