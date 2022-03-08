@@ -16,7 +16,7 @@ struct __attribute__((aligned(32))) Vec
     [[nodiscard]] Vec operator-(const Vec& b) const noexcept { return Vec(x - b.x, y - b.y, z - b.z); }
     [[nodiscard]] Vec operator*(double b) const noexcept { return Vec(x * b, y * b, z * b); }
     [[nodiscard]] Vec mult(const Vec& b) const noexcept { return Vec(x * b.x, y * b.y, z * b.z); }
-    [[nodiscard]] Vec& norm() noexcept { return *this = *this * (1 / sqrt(x * x + y * y + z * z)); }
+    [[nodiscard]] Vec norm() const noexcept { return Vec(*this) * (1 / sqrt(x * x + y * y + z * z)); }
     [[nodiscard]] double dot(const Vec& b) const noexcept { return x * b.x + y * b.y + z * b.z; } // cross:
     [[nodiscard]] Vec operator%(const Vec& b) const noexcept { return Vec(y * b.z - z * b.y, z * b.x - x * b.z, x * b.y - y * b.x); }
 };
