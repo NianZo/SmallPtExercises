@@ -155,9 +155,9 @@ int main(int argc, char* argv[])
     Ray cam(Vec(50, 52, 295.6), Vec(0, -0.042612, -1).norm());        // cam pos, dir
     Vec cx = Vec(w * .5135 / h);
     Vec cy = (cx % cam.d).norm() * .5135;
-    Vec r;
+    //Vec r;
     std::vector<Vec> c(static_cast<size_t>(w * h)); // = new Vec[w * h];
-#pragma omp parallel for schedule(dynamic, 1) private(r) // OpenMP
+#pragma omp parallel for schedule(dynamic, 1) // OpenMP
     for (uint32_t y = 0; y < h; y++)
     { // Loop over image rows
     	std::cerr << "\rRendering (" << samps * 4 << " spp) " << 100. * y / (h - 1);
@@ -168,8 +168,9 @@ int main(int argc, char* argv[])
         {
             for (uint32_t sy = 0, i = (h - y - 1) * w + x; sy < 2; sy++)       // 2x2 subpixel rows
             {
-                for (int sx = 0; sx < 2; sx++, r = Vec())
+                for (int sx = 0; sx < 2; sx++)
                 { // 2x2 subpixel cols
+                	Vec r;
                     for (int s = 0; s < samps; s++)
                     {
                         double r1 = 2 * dis(gen);
