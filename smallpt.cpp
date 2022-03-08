@@ -3,12 +3,13 @@
 #include <cstdlib> // Make : g++ -O3 -fopenmp smallpt.cpp -o smallpt
 #include <fstream>
 #include <iostream>
+#include <array>
 #include <vector>
 #include <random>
 struct Vec
 {                   // Usage: time ./smallpt 5000 && xv image.ppm
     double x, y, z; // position, also color (r,g,b)
-    explicit Vec(double x_ = 0, double y_ = 0, double z_ = 0) : x(x_), y(y_), z(z_) {};
+    explicit Vec(double x_ = 0, double y_ = 0, double z_ = 0) noexcept : x(x_), y(y_), z(z_) {};
     Vec operator+(const Vec& b) const { return Vec(x + b.x, y + b.y, z + b.z); }
     Vec operator-(const Vec& b) const { return Vec(x - b.x, y - b.y, z - b.z); }
     Vec operator*(double b) const { return Vec(x * b, y * b, z * b); }
@@ -33,11 +34,10 @@ struct Sphere
     double rad;  // radius
     Vec p, e, c; // position, emission, color
     Refl_t refl; // reflection type (DIFFuse, SPECular, REFRactive)
-    Sphere(double rad_, Vec p_, Vec e_, Vec c_, Refl_t refl_) : rad(rad_), p(p_), e(e_), c(c_), refl(refl_) {}
+    Sphere(double rad_, Vec p_, Vec e_, Vec c_, Refl_t refl_) noexcept : rad(rad_), p(p_), e(e_), c(c_), refl(refl_) {}
     double intersect(const Ray& r) const
     {                     // returns distance, 0 if nohit
         Vec op = p - r.o; // Solve t^2*d.d + 2*t*(o-p).d + (o-p).(o-p)-R^2 = 0
-        double t;
         double eps = 1e-4;
         double b = op.dot(r.d);
         double det = b * b - op.dot(op) + rad * rad;
@@ -45,14 +45,12 @@ struct Sphere
         {
             return 0;
         }
-        else
-        {
-            det = sqrt(det);
-        }
-        return (t = b - det) > eps ? t : ((t = b + det) > eps ? t : 0);
+        det = sqrt(det);
+        double t = b - det;
+        return t > eps ? t : ((t = b + det) > eps ? t : 0);
     }
 };
-Sphere spheres[] = {
+std::array<Sphere, 9> spheres = {
     // Scene: radius, position, emission, color, material
     Sphere(1e5, Vec(1e5 + 1, 40.8, 81.6), Vec(), Vec(.75, .25, .25), DIFF),   // Left
     Sphere(1e5, Vec(-1e5 + 99, 40.8, 81.6), Vec(), Vec(.25, .25, .75), DIFF), // Rght
@@ -66,15 +64,15 @@ Sphere spheres[] = {
 };
 inline double clamp(double x) { return x < 0 ? 0 : x > 1 ? 1
                                                          : x; }
-inline int toInt(double x) { return int(pow(clamp(x), 1 / 2.2) * 255 + .5); }
+inline int toInt(double x) { return static_cast<int>(lround(pow(clamp(x), 1/ 2.2) * 255));}
 inline bool intersect(const Ray& r, double& t, int& id)
 {
-    double n = sizeof(spheres) / sizeof(Sphere);
-    double d;
+    double n = static_cast<double>(sizeof(spheres)) / sizeof(Sphere);
     double inf = t = 1e20;
-    for (int i = int(n); i--;)
+    for (int i = static_cast<int>(n); i >= 0; i--)
     {
-        if ((d = spheres[i].intersect(r)) && d < t)
+    	double d = spheres[static_cast<uint32_t>(i)].intersect(r);
+        if (d > 0.0 && d < t)
         {
             t = d;
             id = i;
@@ -85,13 +83,13 @@ inline bool intersect(const Ray& r, double& t, int& id)
 Vec radiance(const Ray& r, int depth, std::mt19937& gen)
 {
 	std::uniform_real_distribution<> dis(0.0F, 1.0F);
-    double t;   // distance to intersection
+    double t = 1e20;   // distance to intersection
     int id = 0; // id of intersected object
     if (!intersect(r, t, id))
     {
         return Vec();                // if miss, return black
     }
-    const Sphere& obj = spheres[id]; // the hit object
+    const Sphere& obj = spheres[static_cast<uint32_t>(id)]; // the hit object
     Vec x = r.o + r.d * t;
     Vec n = (x - obj.p).norm();
     Vec nl = n.dot(r.d) < 0 ? n : n * -1;
@@ -118,7 +116,8 @@ Vec radiance(const Ray& r, int depth, std::mt19937& gen)
         Vec v = w % u;
         Vec d = (u * cos(r1) * r2s + v * sin(r1) * r2s + w * sqrt(1 - r2)).norm();
         return obj.e + f.mult(radiance(Ray(x, d), depth, gen));
-    } else if (obj.refl == SPEC) // Ideal SPECULAR reflection
+    }
+    if (obj.refl == SPEC) // Ideal SPECULAR reflection
     {
         return obj.e + f.mult(radiance(Ray(x, r.d - n * 2 * n.dot(r.d)), depth, gen));
     }
@@ -128,8 +127,8 @@ Vec radiance(const Ray& r, int depth, std::mt19937& gen)
     double nt = 1.5;
     double nnt = into ? nc / nt : nt / nc;
     double ddn = r.d.dot(nl);
-    double cos2t;
-    if ((cos2t = 1 - nnt * nnt * (1 - ddn * ddn)) < 0) // Total internal reflection
+    double cos2t = 1 - nnt * nnt * (1 - ddn * ddn);
+    if (cos2t < 0) // Total internal reflection
     {
         return obj.e + f.mult(radiance(reflRay, depth, gen));
     }
@@ -152,12 +151,12 @@ int main(int argc, char* argv[])
 {
     constexpr uint32_t w = 1024;
     constexpr uint32_t h = 768;
-    int samps = argc == 2 ? atoi(argv[1]) / 4 : 1; // # samples
+    int samps = argc == 2 ? std::stoi(argv[1]) / 4 : 1; // # samples
     Ray cam(Vec(50, 52, 295.6), Vec(0, -0.042612, -1).norm());        // cam pos, dir
     Vec cx = Vec(w * .5135 / h);
     Vec cy = (cx % cam.d).norm() * .5135;
     Vec r;
-    std::vector<Vec> c(w * h); // = new Vec[w * h];
+    std::vector<Vec> c(static_cast<size_t>(w * h)); // = new Vec[w * h];
 #pragma omp parallel for schedule(dynamic, 1) private(r) // OpenMP
     for (uint32_t y = 0; y < h; y++)
     { // Loop over image rows
