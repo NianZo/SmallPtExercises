@@ -151,6 +151,25 @@ Vec radiance(const Ray& r, int depth, std::mt19937& gen)
                                     : radiance(reflRay, depth, gen) * Re + radiance(Ray(x, tdir), depth, gen) * Tr);
 }
 
+Vec AccumulateSampleRadiance(const int samps, const Vec &cx, int sx,
+		const uint32_t x, const uint32_t w, const Vec &cy, uint32_t sy,
+		const uint32_t y, const uint32_t h, const Ray &cam,
+		std::uniform_real_distribution<> &dis, std::mt19937 &gen) {
+	Vec r;
+	for (int s = 0; s < samps; s++) {
+		const double r1 = 2 * dis(gen);
+		const double dx = r1 < 1 ? sqrt(r1) - 1 : 1 - sqrt(2 - r1);
+		const double r2 = 2 * dis(gen);
+		const double dy = r2 < 1 ? sqrt(r2) - 1 : 1 - sqrt(2 - r2);
+		const Vec d = cx * (((sx + .5 + dx) / 2 + x) / w - .5)
+				+ cy * (((sy + .5 + dy) / 2 + y) / h - .5) + cam.d;
+		r = r
+				+ radiance(Ray(cam.o + d * 140, Vec(d).norm()), 0, gen)
+						* (1. / samps);
+	} // Camera rays are pushed ^^^^^ forward to start in interior
+	return r;
+}
+
 inline void ProcessPixel(const uint32_t h, const uint32_t y, const uint32_t w,
                          const uint32_t x, const int samps, std::uniform_real_distribution<>& dis,
                          const Vec& cx, const Vec& cy, const Ray& cam, std::mt19937& gen,
@@ -161,16 +180,7 @@ inline void ProcessPixel(const uint32_t h, const uint32_t y, const uint32_t w,
         for (int sx = 0; sx < 2; sx++)
         {
             // 2x2 subpixel cols
-            Vec r;
-            for (int s = 0; s < samps; s++)
-            {
-                const double r1 = 2 * dis(gen);
-                const double dx = r1 < 1 ? sqrt(r1) - 1 : 1 - sqrt(2 - r1);
-                const double r2 = 2 * dis(gen);
-                const double dy = r2 < 1 ? sqrt(r2) - 1 : 1 - sqrt(2 - r2);
-                const Vec d = cx * (((sx + .5 + dx) / 2 + x) / w - .5) + cy * (((sy + .5 + dy) / 2 + y) / h - .5) + cam.d;
-                r = r + radiance(Ray(cam.o + d * 140, Vec(d).norm()), 0, gen) * (1. / samps);
-            } // Camera rays are pushed ^^^^^ forward to start in interior
+            const Vec r = AccumulateSampleRadiance(samps, cx, sx, x, w, cy, sy, y, h, cam, dis, gen);
             c[i] = c[i] + Vec(clamp(r.x), clamp(r.y), clamp(r.z)) * .25;
         }
     }
@@ -205,7 +215,7 @@ int main(int argc, char* argv[])
     f << "P3\n"
       << w << " " << h << "\n"
       << 255 << "\n";
-    for (auto printVec : c)
+    for (const auto& printVec : c)
     {
         f << toInt(printVec.x) << " " << toInt(printVec.y) << " " << toInt(printVec.z) << " ";
     }
