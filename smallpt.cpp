@@ -22,7 +22,7 @@ struct __attribute__((aligned(32))) Vec
 };
 struct __attribute__((aligned(64))) Ray
 {
-    Vec o, d;
+    const Vec o, d;
     Ray(const Vec& o_, const Vec& d_) : o(o_), d(d_) {}
 };
 enum Refl_t
@@ -33,9 +33,9 @@ enum Refl_t
 }; // material types, used in radiance()
 struct __attribute__((aligned(128))) Sphere
 {
-    Vec p, e, c; // position, emission, color
-    double rad;  // radius
-    Refl_t refl; // reflection type (DIFFuse, SPECular, REFRactive)
+    const Vec p, e, c; // position, emission, color
+    const double rad;  // radius
+    const Refl_t refl; // reflection type (DIFFuse, SPECular, REFRactive)
     Sphere(const Vec& p_, const Vec& e_, const Vec& c_, double rad_, Refl_t refl_) noexcept : p(p_), e(e_), c(c_), rad(rad_), refl(refl_) {}
     [[nodiscard]] double intersect(const Ray& r) const
     {                           // returns distance, 0 if nohit
