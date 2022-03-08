@@ -6,19 +6,19 @@
 #include <array>
 #include <vector>
 #include <random>
-struct Vec
+struct __attribute__((aligned(32))) Vec
 {                   // Usage: time ./smallpt 5000 && xv image.ppm
     double x, y, z; // position, also color (r,g,b)
     explicit Vec(double x_ = 0, double y_ = 0, double z_ = 0) noexcept : x(x_), y(y_), z(z_) {};
-    Vec operator+(const Vec& b) const { return Vec(x + b.x, y + b.y, z + b.z); }
-    Vec operator-(const Vec& b) const { return Vec(x - b.x, y - b.y, z - b.z); }
-    Vec operator*(double b) const { return Vec(x * b, y * b, z * b); }
-    Vec mult(const Vec& b) const { return Vec(x * b.x, y * b.y, z * b.z); }
-    Vec& norm() { return *this = *this * (1 / sqrt(x * x + y * y + z * z)); }
-    double dot(const Vec& b) const { return x * b.x + y * b.y + z * b.z; } // cross:
-    Vec operator%(Vec& b) { return Vec(y * b.z - z * b.y, z * b.x - x * b.z, x * b.y - y * b.x); }
+    Vec operator+(const Vec& b) const noexcept { return Vec(x + b.x, y + b.y, z + b.z); }
+    Vec operator-(const Vec& b) const noexcept { return Vec(x - b.x, y - b.y, z - b.z); }
+    Vec operator*(double b) const noexcept { return Vec(x * b, y * b, z * b); }
+    Vec mult(const Vec& b) const noexcept { return Vec(x * b.x, y * b.y, z * b.z); }
+    Vec& norm() noexcept { return *this = *this * (1 / sqrt(x * x + y * y + z * z)); }
+    double dot(const Vec& b) const noexcept { return x * b.x + y * b.y + z * b.z; } // cross:
+    Vec operator%(Vec& b) const noexcept { return Vec(y * b.z - z * b.y, z * b.x - x * b.z, x * b.y - y * b.x); }
 };
-struct Ray
+struct __attribute__((aligned(64))) Ray
 {
     Vec o, d;
     Ray(Vec o_, Vec d_) : o(o_), d(d_) {}
@@ -29,12 +29,12 @@ enum Refl_t
     SPEC,
     REFR
 }; // material types, used in radiance()
-struct Sphere
+struct __attribute__((aligned(128))) Sphere
 {
-    double rad;  // radius
     Vec p, e, c; // position, emission, color
+    double rad;  // radius
     Refl_t refl; // reflection type (DIFFuse, SPECular, REFRactive)
-    Sphere(double rad_, Vec p_, Vec e_, Vec c_, Refl_t refl_) noexcept : rad(rad_), p(p_), e(e_), c(c_), refl(refl_) {}
+    Sphere(Vec p_, Vec e_, Vec c_, double rad_, Refl_t refl_) noexcept : p(p_), e(e_), c(c_), rad(rad_), refl(refl_) {}
     double intersect(const Ray& r) const
     {                     // returns distance, 0 if nohit
         Vec op = p - r.o; // Solve t^2*d.d + 2*t*(o-p).d + (o-p).(o-p)-R^2 = 0
@@ -50,17 +50,17 @@ struct Sphere
         return t > eps ? t : ((t = b + det) > eps ? t : 0);
     }
 };
-std::array<Sphere, 9> spheres = {
+const std::array<Sphere, 9> spheres = {
     // Scene: radius, position, emission, color, material
-    Sphere(1e5, Vec(1e5 + 1, 40.8, 81.6), Vec(), Vec(.75, .25, .25), DIFF),   // Left
-    Sphere(1e5, Vec(-1e5 + 99, 40.8, 81.6), Vec(), Vec(.25, .25, .75), DIFF), // Rght
-    Sphere(1e5, Vec(50, 40.8, 1e5), Vec(), Vec(.75, .75, .75), DIFF),         // Back
-    Sphere(1e5, Vec(50, 40.8, -1e5 + 170), Vec(), Vec(), DIFF),               // Frnt
-    Sphere(1e5, Vec(50, 1e5, 81.6), Vec(), Vec(.75, .75, .75), DIFF),         // Botm
-    Sphere(1e5, Vec(50, -1e5 + 81.6, 81.6), Vec(), Vec(.75, .75, .75), DIFF), // Top
-    Sphere(16.5, Vec(27, 16.5, 47), Vec(), Vec(1, 1, 1) * .999, SPEC),        // Mirr
-    Sphere(16.5, Vec(73, 16.5, 78), Vec(), Vec(1, 1, 1) * .999, REFR),        // Glas
-    Sphere(600, Vec(50, 681.6 - .27, 81.6), Vec(12, 12, 12), Vec(), DIFF)     // Lite
+    Sphere(Vec(1e5 + 1, 40.8, 81.6), Vec(), Vec(.75, .25, .25), 1e5,DIFF),   // Left
+    Sphere(Vec(-1e5 + 99, 40.8, 81.6), Vec(), Vec(.25, .25, .75), 1e5, DIFF), // Rght
+    Sphere(Vec(50, 40.8, 1e5), Vec(), Vec(.75, .75, .75), 1e5, DIFF),         // Back
+    Sphere(Vec(50, 40.8, -1e5 + 170), Vec(), Vec(), 1e5, DIFF),               // Frnt
+    Sphere(Vec(50, 1e5, 81.6), Vec(), Vec(.75, .75, .75), 1e5, DIFF),         // Botm
+    Sphere(Vec(50, -1e5 + 81.6, 81.6), Vec(), Vec(.75, .75, .75), 1e5, DIFF), // Top
+    Sphere(Vec(27, 16.5, 47), Vec(), Vec(1, 1, 1) * .999, 16.5, SPEC),        // Mirr
+    Sphere(Vec(73, 16.5, 78), Vec(), Vec(1, 1, 1) * .999, 16.5, REFR),        // Glas
+    Sphere(Vec(50, 681.6 - .27, 81.6), Vec(12, 12, 12), Vec(), 600, DIFF)     // Lite
 };
 inline double clamp(double x) { return x < 0 ? 0 : x > 1 ? 1
                                                          : x; }
@@ -147,6 +147,32 @@ Vec radiance(const Ray& r, int depth, std::mt19937& gen)
                                                        : radiance(Ray(x, tdir), depth, gen) * TP)
                                     : radiance(reflRay, depth, gen) * Re + radiance(Ray(x, tdir), depth, gen) * Tr);
 }
+
+inline void ProcessPixel(uint32_t h, uint32_t y, uint32_t w,
+		uint32_t x, int samps, std::uniform_real_distribution<> &dis,
+		const Vec &cx, const Vec &cy, const Ray &cam, std::mt19937 &gen,
+		std::vector<Vec> &c) {
+	for (uint32_t sy = 0, i = (h - y - 1) * w + x; sy < 2; sy++) // 2x2 subpixel rows
+			{
+		for (int sx = 0; sx < 2; sx++) {
+			// 2x2 subpixel cols
+			Vec r;
+			for (int s = 0; s < samps; s++) {
+				double r1 = 2 * dis(gen);
+				double dx = r1 < 1 ? sqrt(r1) - 1 : 1 - sqrt(2 - r1);
+				double r2 = 2 * dis(gen);
+				double dy = r2 < 1 ? sqrt(r2) - 1 : 1 - sqrt(2 - r2);
+				Vec d = cx * (((sx + .5 + dx) / 2 + x) / w - .5)
+						+ cy * (((sy + .5 + dy) / 2 + y) / h - .5) + cam.d;
+				r = r
+						+ radiance(Ray(cam.o + d * 140, d.norm()), 0, gen)
+								* (1. / samps);
+			} // Camera rays are pushed ^^^^^ forward to start in interior
+			c[i] = c[i] + Vec(clamp(r.x), clamp(r.y), clamp(r.z)) * .25;
+		}
+	}
+}
+
 int main(int argc, char* argv[])
 {
     constexpr uint32_t w = 1024;
@@ -166,24 +192,7 @@ int main(int argc, char* argv[])
         std::uniform_real_distribution<> dis(0.0F, 1.0F);
         for (uint32_t x = 0; x < w; x++) // Loop cols
         {
-            for (uint32_t sy = 0, i = (h - y - 1) * w + x; sy < 2; sy++)       // 2x2 subpixel rows
-            {
-                for (int sx = 0; sx < 2; sx++)
-                { // 2x2 subpixel cols
-                	Vec r;
-                    for (int s = 0; s < samps; s++)
-                    {
-                        double r1 = 2 * dis(gen);
-                        double dx = r1 < 1 ? sqrt(r1) - 1 : 1 - sqrt(2 - r1);
-                        double r2 = 2 * dis(gen);
-                        double dy = r2 < 1 ? sqrt(r2) - 1 : 1 - sqrt(2 - r2);
-                        Vec d = cx * (((sx + .5 + dx) / 2 + x) / w - .5) +
-                                cy * (((sy + .5 + dy) / 2 + y) / h - .5) + cam.d;
-                        r = r + radiance(Ray(cam.o + d * 140, d.norm()), 0, gen) * (1. / samps);
-                    } // Camera rays are pushed ^^^^^ forward to start in interior
-                    c[i] = c[i] + Vec(clamp(r.x), clamp(r.y), clamp(r.z)) * .25;
-                }
-            }
+			ProcessPixel(h, y, w, x, samps, dis, cx, cy, cam, gen, c);
         }
     }
     std::ofstream f;
