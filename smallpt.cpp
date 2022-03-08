@@ -5,18 +5,19 @@
 #include <fstream>
 #include <iostream>
 #include <random>
+#include <span>
 #include <vector>
 struct __attribute__((aligned(32))) Vec
 {                   // Usage: time ./smallpt 5000 && xv image.ppm
     double x, y, z; // position, also color (r,g,b)
     explicit Vec(double x_ = 0, double y_ = 0, double z_ = 0) noexcept : x(x_), y(y_), z(z_){};
-    Vec operator+(const Vec& b) const noexcept { return Vec(x + b.x, y + b.y, z + b.z); }
-    Vec operator-(const Vec& b) const noexcept { return Vec(x - b.x, y - b.y, z - b.z); }
-    Vec operator*(double b) const noexcept { return Vec(x * b, y * b, z * b); }
-    Vec mult(const Vec& b) const noexcept { return Vec(x * b.x, y * b.y, z * b.z); }
-    Vec& norm() noexcept { return *this = *this * (1 / sqrt(x * x + y * y + z * z)); }
-    double dot(const Vec& b) const noexcept { return x * b.x + y * b.y + z * b.z; } // cross:
-    Vec operator%(Vec& b) const noexcept { return Vec(y * b.z - z * b.y, z * b.x - x * b.z, x * b.y - y * b.x); }
+    [[nodiscard]] Vec operator+(const Vec& b) const noexcept { return Vec(x + b.x, y + b.y, z + b.z); }
+    [[nodiscard]] Vec operator-(const Vec& b) const noexcept { return Vec(x - b.x, y - b.y, z - b.z); }
+    [[nodiscard]] Vec operator*(double b) const noexcept { return Vec(x * b, y * b, z * b); }
+    [[nodiscard]] Vec mult(const Vec& b) const noexcept { return Vec(x * b.x, y * b.y, z * b.z); }
+    [[nodiscard]] Vec& norm() noexcept { return *this = *this * (1 / sqrt(x * x + y * y + z * z)); }
+    [[nodiscard]] double dot(const Vec& b) const noexcept { return x * b.x + y * b.y + z * b.z; } // cross:
+    [[nodiscard]] Vec operator%(Vec& b) const noexcept { return Vec(y * b.z - z * b.y, z * b.x - x * b.z, x * b.y - y * b.x); }
 };
 struct __attribute__((aligned(64))) Ray
 {
@@ -35,7 +36,7 @@ struct __attribute__((aligned(128))) Sphere
     double rad;  // radius
     Refl_t refl; // reflection type (DIFFuse, SPECular, REFRactive)
     Sphere(Vec p_, Vec e_, Vec c_, double rad_, Refl_t refl_) noexcept : p(p_), e(e_), c(c_), rad(rad_), refl(refl_) {}
-    double intersect(const Ray& r) const
+    [[nodiscard]] double intersect(const Ray& r) const
     {                     // returns distance, 0 if nohit
         Vec op = p - r.o; // Solve t^2*d.d + 2*t*(o-p).d + (o-p).(o-p)-R^2 = 0
         double eps = 1e-4;
@@ -177,8 +178,8 @@ int main(int argc, char* argv[])
 {
     constexpr uint32_t w = 1024;
     constexpr uint32_t h = 768;
-    int samps = argc == 2 ? std::stoi(argv[1]) / 4 : 1;        // # samples
-    Ray cam(Vec(50, 52, 295.6), Vec(0, -0.042612, -1).norm()); // cam pos, dir
+    int samps = argc == 2 ? std::stoi(std::span(argv, static_cast<uint32_t>(argc))[1]) / 4 : 1; // # samples
+    Ray cam(Vec(50, 52, 295.6), Vec(0, -0.042612, -1).norm());                                  // cam pos, dir
     Vec cx = Vec(w * .5135 / h);
     Vec cy = (cx % cam.d).norm() * .5135;
     // Vec r;
