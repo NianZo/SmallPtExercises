@@ -71,7 +71,7 @@ inline int toInt(const double x) { return static_cast<int>(lround(pow(clamp(x), 
 inline bool intersect(const Ray& r, double& t, int& id)
 {
     const double n = static_cast<double>(sizeof(spheres)) / sizeof(Sphere);
-    double inf = t = 1e20;
+    const double inf = 1e20;
     for (int i = static_cast<int>(n); i >= 0; i--)
     {
         const double d = spheres[static_cast<uint32_t>(i)].intersect(r);
