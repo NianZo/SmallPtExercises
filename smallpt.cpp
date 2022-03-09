@@ -8,22 +8,81 @@
 #include <span>
 #include <sstream>
 #include <vector>
+
+constexpr auto seed()
+{
+  std::uint64_t shifted = 0;
+
+  for( const auto c : __TIME__ )
+  {
+    shifted <<= 8;
+    shifted |= c;
+  }
+
+  return shifted;
+}
+
+struct PCG
+{
+  struct pcg32_random_t { std::uint64_t state=0;  std::uint64_t inc=seed(); };
+  pcg32_random_t rng;
+  typedef std::uint32_t result_type;
+
+  constexpr result_type operator()()
+  {
+    return pcg32_random_r();
+  }
+
+  static result_type constexpr min()
+  {
+    return std::numeric_limits<result_type>::min();
+  }
+
+  static result_type constexpr max()
+  {
+    return std::numeric_limits<result_type>::min();
+  }
+
+  private:
+  constexpr std::uint32_t pcg32_random_r()
+  {
+    std::uint64_t oldstate = rng.state;
+    // Advance internal state
+    rng.state = oldstate * 6364136223846793005ULL + (rng.inc|1);
+    // Calculate output function (XSH RR), uses old state for max ILP
+    std::uint32_t xorshifted = ((oldstate >> 18u) ^ oldstate) >> 27u;
+    std::uint32_t rot = oldstate >> 59u;
+    return (xorshifted >> rot) | (xorshifted << ((-rot) & 31));
+  }
+
+};
+
+constexpr auto get_random(int count)
+{
+  PCG pcg;
+  while(count > 0){
+    pcg();
+    --count;
+  }
+  return static_cast<double>(pcg()) / std::numeric_limits<uint32_t>::max();
+}
+
 struct __attribute__((aligned(32))) Vec
 {                   // Usage: time ./smallpt 5000 && xv image.ppm
     double x, y, z; // position, also color (r,g,b)
-    explicit Vec(double x_ = 0, double y_ = 0, double z_ = 0) noexcept : x(x_), y(y_), z(z_){};
-    [[nodiscard]] Vec operator+(const Vec& b) const noexcept { return Vec(x + b.x, y + b.y, z + b.z); }
-    [[nodiscard]] Vec operator-(const Vec& b) const noexcept { return Vec(x - b.x, y - b.y, z - b.z); }
-    [[nodiscard]] Vec operator*(double b) const noexcept { return Vec(x * b, y * b, z * b); }
-    [[nodiscard]] Vec mult(const Vec& b) const noexcept { return Vec(x * b.x, y * b.y, z * b.z); }
-    [[nodiscard]] Vec norm() const noexcept { return Vec(*this) * (1 / sqrt(x * x + y * y + z * z)); }
-    [[nodiscard]] double dot(const Vec& b) const noexcept { return x * b.x + y * b.y + z * b.z; } // cross:
-    [[nodiscard]] Vec operator%(const Vec& b) const noexcept { return Vec(y * b.z - z * b.y, z * b.x - x * b.z, x * b.y - y * b.x); }
+    explicit constexpr Vec(double x_ = 0, double y_ = 0, double z_ = 0) noexcept : x(x_), y(y_), z(z_){};
+    [[nodiscard]] constexpr Vec operator+(const Vec& b) const noexcept { return Vec(x + b.x, y + b.y, z + b.z); }
+    [[nodiscard]] constexpr Vec operator-(const Vec& b) const noexcept { return Vec(x - b.x, y - b.y, z - b.z); }
+    [[nodiscard]] constexpr Vec operator*(double b) const noexcept { return Vec(x * b, y * b, z * b); }
+    [[nodiscard]] constexpr Vec mult(const Vec& b) const noexcept { return Vec(x * b.x, y * b.y, z * b.z); }
+    [[nodiscard]] constexpr Vec norm() const noexcept { return Vec(*this) * (1 / sqrt(x * x + y * y + z * z)); }
+    [[nodiscard]] constexpr double dot(const Vec& b) const noexcept { return x * b.x + y * b.y + z * b.z; } // cross:
+    [[nodiscard]] constexpr Vec operator%(const Vec& b) const noexcept { return Vec(y * b.z - z * b.y, z * b.x - x * b.z, x * b.y - y * b.x); }
 };
 struct __attribute__((aligned(64))) Ray
 {
     const Vec o, d;
-    Ray(const Vec& o_, const Vec& d_) : o(o_), d(d_) {}
+    constexpr Ray(const Vec& o_, const Vec& d_) : o(o_), d(d_) {}
 };
 enum Refl_t
 {
@@ -36,11 +95,11 @@ struct __attribute__((aligned(128))) Sphere
     const Vec p, e, c; // position, emission, color
     const double rad;  // radius
     const Refl_t refl; // reflection type (DIFFuse, SPECular, REFRactive)
-    Sphere(const Vec& p_, const Vec& e_, const Vec& c_, double rad_, Refl_t refl_) noexcept : p(p_), e(e_), c(c_), rad(rad_), refl(refl_) {}
-    [[nodiscard]] double intersect(const Ray& r) const
+    constexpr Sphere(const Vec& p_, const Vec& e_, const Vec& c_, double rad_, Refl_t refl_) noexcept : p(p_), e(e_), c(c_), rad(rad_), refl(refl_) {}
+    [[nodiscard]] constexpr double intersect(const Ray& r) const
     {                           // returns distance, 0 if nohit
         const Vec op = p - r.o; // Solve t^2*d.d + 2*t*(o-p).d + (o-p).(o-p)-R^2 = 0
-        const double eps = 1e-4;
+        constexpr double eps = 1e-4;
         const double b = op.dot(r.d);
         const double det2 = b * b - op.dot(op) + rad * rad;
         if (det2 < 0)
@@ -53,7 +112,7 @@ struct __attribute__((aligned(128))) Sphere
         return t1 > eps ? t1 : (t2 > eps ? t2 : 0);
     }
 };
-const std::array<Sphere, 9> spheres = {
+constexpr std::array<Sphere, 9> spheres = {
     // Scene: radius, position, emission, color, material
     Sphere(Vec(1e5 + 1, 40.8, 81.6), Vec(), Vec(.75, .25, .25), 1e5, DIFF),   // Left
     Sphere(Vec(-1e5 + 99, 40.8, 81.6), Vec(), Vec(.25, .25, .75), 1e5, DIFF), // Rght
@@ -65,35 +124,44 @@ const std::array<Sphere, 9> spheres = {
     Sphere(Vec(73, 16.5, 78), Vec(), Vec(1, 1, 1) * .999, 16.5, REFR),        // Glas
     Sphere(Vec(50, 681.6 - .27, 81.6), Vec(12, 12, 12), Vec(), 600, DIFF)     // Lite
 };
-inline double clamp(const double x) { return x < 0 ? 0 : x > 1 ? 1
+inline constexpr double clamp(const double x) { return x < 0 ? 0 : x > 1 ? 1
                                                                : x; }
-inline int toInt(const double x) { return static_cast<int>(lround(pow(clamp(x), 1 / 2.2) * 255)); }
-inline bool intersect(const Ray& r, double& t, int& id)
+inline constexpr int toInt(const double x) { return static_cast<int>(lround(pow(clamp(x), 1 / 2.2) * 255)); }
+struct Intersection
 {
-    const double n = static_cast<double>(sizeof(spheres)) / sizeof(Sphere);
-    const double inf = 1e20;
-    for (int i = static_cast<int>(n); i >= 0; i--)
+	double t;
+	uint32_t id;
+	bool hit;
+};
+inline constexpr Intersection intersect(const Ray& r)
+{
+    //constexpr double n = static_cast<double>(sizeof(spheres)) / sizeof(Sphere);
+    constexpr double inf = 1e20;
+    double t = 1e20;
+    uint32_t id = 0;
+    for (uint32_t i = 0; i < spheres.size(); i++)
     {
-        const double d = spheres[static_cast<uint32_t>(i)].intersect(r);
+        const double d = spheres[i].intersect(r);
         if (d > 0.0 && d < t)
         {
             t = d;
             id = i;
         }
     }
-    return t < inf;
+    return {t, id, t < inf};
 }
 Vec radiance(const Ray& r, int depth, std::mt19937& gen)
 {
     std::uniform_real_distribution<> dis(0.0F, 1.0F);
-    double t = 1e20; // distance to intersection
-    int id = 0;      // id of intersected object
-    if (!intersect(r, t, id))
+    //double t = 1e20; // distance to intersection
+    //int id = 0;      // id of intersected object
+    const Intersection intersection = intersect(r);
+    if (!intersection.hit)
     {
         return Vec(); // if miss, return black
     }
-    const Sphere& obj = spheres[static_cast<uint32_t>(id)]; // the hit object
-    const Vec x = r.o + r.d * t;
+    const Sphere& obj = spheres[static_cast<uint32_t>(intersection.id)]; // the hit object
+    const Vec x = r.o + r.d * intersection.t;
     const Vec n = (x - obj.p).norm();
     const Vec nl = n.dot(r.d) < 0 ? n : n * -1;
     Vec f = obj.c;
@@ -126,8 +194,8 @@ Vec radiance(const Ray& r, int depth, std::mt19937& gen)
     }
     const Ray reflRay(x, r.d - n * 2 * n.dot(r.d)); // Ideal dielectric REFRACTION
     const bool into = n.dot(nl) > 0;                // Ray from outside going in?
-    const double nc = 1;
-    const double nt = 1.5;
+    constexpr double nc = 1;
+    constexpr double nt = 1.5;
     const double nnt = into ? nc / nt : nt / nc;
     const double ddn = r.d.dot(nl);
     const double cos2t = 1 - nnt * nnt * (1 - ddn * ddn);
@@ -136,9 +204,9 @@ Vec radiance(const Ray& r, int depth, std::mt19937& gen)
         return obj.e + f.mult(radiance(reflRay, depth, gen));
     }
     const Vec tdir = (r.d * nnt - n * ((into ? 1 : -1) * (ddn * nnt + sqrt(cos2t)))).norm();
-    const double a = nt - nc;
-    const double b = nt + nc;
-    const double R0 = a * a / (b * b);
+    constexpr double a = nt - nc;
+    constexpr double b = nt + nc;
+    constexpr double R0 = a * a / (b * b);
     const double c = 1 - (into ? -ddn : tdir.dot(n));
     const double Re = R0 + (1 - R0) * c * c * c * c * c;
     const double Tr = 1 - Re;
@@ -163,9 +231,7 @@ Vec AccumulateSampleRadiance(const int samps, const Vec &cx, int sx,
 		const double dy = r2 < 1 ? sqrt(r2) - 1 : 1 - sqrt(2 - r2);
 		const Vec d = cx * (((sx + .5 + dx) / 2 + x) / w - .5)
 				+ cy * (((sy + .5 + dy) / 2 + y) / h - .5) + cam.d;
-		r = r
-				+ radiance(Ray(cam.o + d * 140, Vec(d).norm()), 0, gen)
-						* (1. / samps);
+		r = r + radiance(Ray(cam.o + d * 140, Vec(d).norm()), 0, gen) * (1. / samps);
 	} // Camera rays are pushed ^^^^^ forward to start in interior
 	return r;
 }
@@ -191,9 +257,9 @@ int main(int argc, char* argv[])
     constexpr uint32_t w = 1024;
     constexpr uint32_t h = 768;
     const int samps = argc == 2 ? std::stoi(std::span(argv, static_cast<uint32_t>(argc))[1]) / 4 : 1; // # samples
-    const Ray cam(Vec(50, 52, 295.6), Vec(0, -0.042612, -1).norm());                                  // cam pos, dir
-    const Vec cx = Vec(w * .5135 / h);
-    const Vec cy = (cx % cam.d).norm() * .5135;
+    constexpr Ray cam(Vec(50, 52, 295.6), Vec(0, -0.042612, -1).norm());                                  // cam pos, dir
+    constexpr Vec cx = Vec(w * .5135 / h);
+    constexpr Vec cy = (cx % cam.d).norm() * .5135;
     // Vec r;
     std::vector<Vec> c(static_cast<size_t>(w * h)); // = new Vec[w * h];
 #pragma omp parallel for schedule(dynamic, 1)       // OpenMP
