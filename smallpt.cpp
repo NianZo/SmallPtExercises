@@ -150,9 +150,9 @@ inline constexpr Intersection intersect(const Ray& r)
     }
     return {t, id, t < inf};
 }
-Vec radiance(const Ray& r, int depth, std::mt19937& gen)
+constexpr Vec radiance(const Ray& r, int depth, std::mt19937& gen, std::uniform_real_distribution<>& dis)
 {
-    std::uniform_real_distribution<double> dis(0.0F, 1.0F);
+    //std::uniform_real_distribution<double> dis(0.0F, 1.0F);
     //double t = 1e20; // distance to intersection
     //int id = 0;      // id of intersected object
     const Intersection intersection = intersect(r);
@@ -186,11 +186,11 @@ Vec radiance(const Ray& r, int depth, std::mt19937& gen)
         const Vec u = ((fabs(w.x) > .1 ? Vec(0, 1) : Vec(1)) % w).norm();
         const Vec v = w % u;
         const Vec d = (u * cos(r1) * r2s + v * sin(r1) * r2s + w * sqrt(1 - r2)).norm();
-        return obj.e + f.mult(radiance(Ray(x, d), depth, gen));
+        return obj.e + f.mult(radiance(Ray(x, d), depth, gen, dis));
     }
     if (obj.refl == SPEC) // Ideal SPECULAR reflection
     {
-        return obj.e + f.mult(radiance(Ray(x, r.d - n * 2 * n.dot(r.d)), depth, gen));
+        return obj.e + f.mult(radiance(Ray(x, r.d - n * 2 * n.dot(r.d)), depth, gen, dis));
     }
     const Ray reflRay(x, r.d - n * 2 * n.dot(r.d)); // Ideal dielectric REFRACTION
     const bool into = n.dot(nl) > 0;                // Ray from outside going in?
@@ -201,7 +201,7 @@ Vec radiance(const Ray& r, int depth, std::mt19937& gen)
     const double cos2t = 1 - nnt * nnt * (1 - ddn * ddn);
     if (cos2t < 0) // Total internal reflection
     {
-        return obj.e + f.mult(radiance(reflRay, depth, gen));
+        return obj.e + f.mult(radiance(reflRay, depth, gen, dis));
     }
     const Vec tdir = (r.d * nnt - n * ((into ? 1 : -1) * (ddn * nnt + sqrt(cos2t)))).norm();
     constexpr double a = nt - nc;
@@ -214,9 +214,9 @@ Vec radiance(const Ray& r, int depth, std::mt19937& gen)
     const double RP = Re / P;
     const double TP = Tr / (1 - P);
     return obj.e + f.mult(depth > 2 ? (dis(gen) < P ? // Russian roulette
-                                           radiance(reflRay, depth, gen) * RP
-                                                    : radiance(Ray(x, tdir), depth, gen) * TP)
-                                    : radiance(reflRay, depth, gen) * Re + radiance(Ray(x, tdir), depth, gen) * Tr);
+                                           radiance(reflRay, depth, gen, dis) * RP
+                                                    : radiance(Ray(x, tdir), depth, gen, dis) * TP)
+                                    : radiance(reflRay, depth, gen, dis) * Re + radiance(Ray(x, tdir), depth, gen, dis) * Tr);
 }
 
 constexpr Vec AccumulateSampleRadiance(const int samps, const Vec &cx, int sx,
@@ -231,7 +231,7 @@ constexpr Vec AccumulateSampleRadiance(const int samps, const Vec &cx, int sx,
 		const double dy = r2 < 1 ? sqrt(r2) - 1 : 1 - sqrt(2 - r2);
 		const Vec d = cx * (((sx + .5 + dx) / 2 + x) / w - .5)
 				+ cy * (((sy + .5 + dy) / 2 + y) / h - .5) + cam.d;
-		r = r + radiance(Ray(cam.o + d * 140, Vec(d).norm()), 0, gen) * (1. / samps);
+		r = r + radiance(Ray(cam.o + d * 140, Vec(d).norm()), 0, gen, dis) * (1. / samps);
 	} // Camera rays are pushed ^^^^^ forward to start in interior
 	return r;
 }
