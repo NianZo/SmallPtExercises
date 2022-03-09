@@ -152,7 +152,7 @@ inline constexpr Intersection intersect(const Ray& r)
 }
 Vec radiance(const Ray& r, int depth, std::mt19937& gen)
 {
-    std::uniform_real_distribution<> dis(0.0F, 1.0F);
+    std::uniform_real_distribution<double> dis(0.0F, 1.0F);
     //double t = 1e20; // distance to intersection
     //int id = 0;      // id of intersected object
     const Intersection intersection = intersect(r);
@@ -219,7 +219,7 @@ Vec radiance(const Ray& r, int depth, std::mt19937& gen)
                                     : radiance(reflRay, depth, gen) * Re + radiance(Ray(x, tdir), depth, gen) * Tr);
 }
 
-Vec AccumulateSampleRadiance(const int samps, const Vec &cx, int sx,
+constexpr Vec AccumulateSampleRadiance(const int samps, const Vec &cx, int sx,
 		const uint32_t x, const uint32_t w, const Vec &cy, uint32_t sy,
 		const uint32_t y, const uint32_t h, const Ray &cam,
 		std::uniform_real_distribution<> &dis, std::mt19937 &gen) {
@@ -236,7 +236,7 @@ Vec AccumulateSampleRadiance(const int samps, const Vec &cx, int sx,
 	return r;
 }
 
-inline void ProcessPixel(const uint32_t h, const uint32_t y, const uint32_t w,
+inline constexpr void ProcessPixel(const uint32_t h, const uint32_t y, const uint32_t w,
                          const uint32_t x, const int samps, std::uniform_real_distribution<>& dis,
                          const Vec& cx, const Vec& cy, const Ray& cam, std::mt19937& gen,
                          std::vector<Vec>& c)
